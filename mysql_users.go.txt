@@ -1,0 +1,120 @@
+package bolt123123
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"reflect"
+
+	_ "github.com/go-sql-driver/mysql"
+
+	fbErrors "github.com/filebrowser/filebrowser/v2/errors"
+	"github.com/filebrowser/filebrowser/v2/users"
+)
+
+type mysqlUsersBackend struct {
+	db *sql.DB
+}
+
+func (st mysqlUsersBackend) GetBy(i interface{}) (user *users.User, err error) {
+	user = &users.User{}
+
+	var query string
+	switch i.(type) {
+	case uint:
+		query = "SELECT * FROM users WHERE id = ?"
+	case string:
+		query = "SELECT * FROM users WHERE username = ?"
+	default:
+		return nil, fbErrors.ErrInvalidDataType
+	}
+
+	row := st.db.QueryRow(query, i)
+	err = row.Scan(&user.ID, &user.Username, &user.Password)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fbErrors.ErrNotExist
+		}
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (st mysqlUsersBackend) Gets() ([]*users.User, error) {
+	query := "SELECT * FROM users"
+	rows, err := st.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var allUsers []*users.User
+	for rows.Next() {
+		user := &users.User{}
+		err := rows.Scan(&user.ID, &user.Username, &user.Password)
+		if err != nil {
+			return nil, err
+		}
+		allUsers = append(allUsers, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return allUsers, nil
+}
+
+func (st mysqlUsersBackend) Update(user *users.User, fields ...string) error {
+	if len(fields) == 0 {
+		return st.Save(user)
+	}
+
+	query := "UPDATE users SET "
+	args := []interface{}{}
+	for _, field := range fields {
+		userField := reflect.ValueOf(user).Elem().FieldByName(field)
+		if !userField.IsValid() {
+			return fmt.Errorf("invalid field: %s", field)
+		}
+		query += fmt.Sprintf("%s = ?, ", field)
+		args = append(args, userField.Interface())
+	}
+	query = query[:len(query)-2] // Remove trailing comma
+	query += " WHERE id = ?"
+	args = append(args, user.ID)
+
+	_, err := st.db.Exec(query, args...)
+	return err
+}
+
+func (st mysqlUsersBackend) Save(user *users.User) error {
+	query := "INSERT INTO users (id, username, password) VALUES (?, ?, ?)"
+	_, err := st.db.Exec(query, user.ID, user.Username, user.Password)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fbErrors.ErrExist
+		}
+		return err
+	}
+	return nil
+}
+
+func (st mysqlUsersBackend) DeleteByID(id uint) error {
+	query := "DELETE FROM users WHERE id = ?"
+	_, err := st.db.Exec(query, id)
+	return err
+}
+
+func (st mysqlUsersBackend) DeleteByUsername(username string) error {
+	user, err := st.GetBy(username)
+	if err != nil {
+		return err
+	}
+	fmt.Println("USER", user)
+
+	query := "DELETE FROM users WHERE username = ?"
+	_, err = st.db.Exec(query, username)
+	return err
+}

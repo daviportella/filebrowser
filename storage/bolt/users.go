@@ -30,6 +30,8 @@ func (st usersBackend) GetBy(i interface{}) (user *users.User, err error) {
 
 	err = st.db.One(arg, i, user)
 
+	fmt.Println("USER", user)
+
 	if err != nil {
 		if errors.Is(err, storm.ErrNotFound) {
 			return nil, fbErrors.ErrNotExist

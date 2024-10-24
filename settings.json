@@ -1,0 +1,9 @@
+{
+  "port": 8080,
+  "baseURL": "localhost",
+  "address": "localhost",
+  "log": "stdout",
+  "root": "C:\\Users\\Portella\\Desktop\\davi\\testes",
+  "auth.method": "json"
+
+}

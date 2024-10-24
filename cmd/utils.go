@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,14 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/asdine/storm/v3"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/filebrowser/filebrowser/v2/settings"
 	"github.com/filebrowser/filebrowser/v2/storage"
-	"github.com/filebrowser/filebrowser/v2/storage/bolt"
+	"github.com/filebrowser/filebrowser/v2/storage/mysql"
 )
 
 func checkErr(err error) {
@@ -86,31 +86,52 @@ func python(fn pythonFunc, cfg pythonConfig) cobraFunc {
 	return func(cmd *cobra.Command, args []string) {
 		data := pythonData{hadDB: true}
 
-		path := getParam(cmd.Flags(), "database")
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			panic(err)
-		}
-		exists, err := dbExists(path)
+		// path := getParam(cmd.Flags(), "database")
+		// absPath, err := filepath.Abs(path)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// exists, err := dbExists(path)
 
-		if err != nil {
-			panic(err)
-		} else if exists && cfg.noDB {
-			log.Fatal(absPath + " already exists")
-		} else if !exists && !cfg.noDB && !cfg.allowNoDB {
-			log.Fatal(absPath + " does not exist. Please run 'filebrowser config init' first.")
-		} else if !exists && !cfg.noDB {
-			log.Println("Warning: filebrowser.db can't be found. Initialing in " + strings.TrimSuffix(absPath, "filebrowser.db"))
-		}
+		// if err != nil {
+		// 	panic(err)
+		// } else if exists && cfg.noDB {
+		// 	log.Fatal(absPath + " already exists")
+		// } else if !exists && !cfg.noDB && !cfg.allowNoDB {
+		// 	log.Fatal(absPath + " does not exist. Please run 'filebrowser config init' first.")
+		// } else if !exists && !cfg.noDB {
+		// 	log.Println("Warning: filebrowser.db can't be found. Initialing in " + strings.TrimSuffix(absPath, "filebrowser.db"))
+		// }
 
-		log.Println("Using database: " + absPath)
-		data.hadDB = exists
-		db, err := storm.Open(path)
-		checkErr(err)
+		log.Println("Using database: mysql")
+		db, err := sql.Open("mysql", "filebrowser_user:#Heitor@22$#@tcp(localhost:3306)/filebrowser_db")
+		if err != nil {
+			log.Println("Error opening database: " + err.Error())
+			log.Fatal(err)
+		}
 		defer db.Close()
-		data.store, err = bolt.NewStorage(db)
+		log.Println("Chegou aqui")
+		data.store, err = mysql.NewStorage(db)
+		log.Println("Chegou aqui 2")
+
+		if err != nil {
+			log.Println("Error creating database: " + err.Error())
+			log.Fatal(err)
+
+		}
+		data.hadDB = true
+
 		checkErr(err)
 		fn(cmd, args, data)
+
+		// log.Println("Using database: " + absPath)
+		// data.hadDB = exists
+		// db, err := storm.Open(path)
+		// checkErr(err)
+		// defer db.Close()
+		// data.store, err = bolt.NewStorage(db)
+		// checkErr(err)
+		// fn(cmd, args, data)
 	}
 }
 
